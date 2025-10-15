@@ -4,17 +4,6 @@ local mod = get_mod("SimpleEnemyOutlines")
 -- This table will store the units we are currently outlining
 local outlined_units = {}
 
--- A list of all enemy breeds that can have specific color overrides
-local ENEMY_BREEDS = {
-    "renegade_executor", "chaos_ogryn_executor", "cultist_mutant", "renegade_berzerker", "cultist_berzerker",
-    "chaos_ogryn_bulwark", "renegade_gunner", "cultist_gunner", "chaos_ogryn_gunner", "renegade_shocktrooper",
-    "cultist_shocktrooper", "renegade_rifleman", "renegade_sniper", "renegade_netgunner", "renegade_assault",
-    "cultist_assault", "chaos_hound", "chaos_poxwalker_bomber", "cultist_flamer", "renegade_flamer",
-    "renegade_plasma_gunner", "cultist_grenadier", "renegade_grenadier", "cultist_holy_stubber_gunner",
-    "renegade_twin_captain", "renegade_twin_captain_two", "cultist_ritualist", "chaos_plague_ogryn",
-    "chaos_plague_ogryn_sprayer", "chaos_spawn", "chaos_beast_of_nurgle", "chaos_daemonhost",
-}
-
 -- Defines the colors available in the mod options.
 local OUTLINE_COLOR_TEMPLATES = {
     red = { color = {1, 0, 0}, priority = 4 },
@@ -60,6 +49,10 @@ end
 
 local function get_elite_color()
     return mod:get("elite_color")
+end
+
+local function is_per_enemy_colors_enabled()
+    return mod:get("enable_per_enemy_colors")
 end
 
 local function get_max_outlines()
@@ -204,33 +197,38 @@ local function update_outlines()
     local desired_outlines = {}
     local potential_outlines = {}
 
+    local use_per_enemy_colors = is_per_enemy_colors_enabled()
+
     -- Determine which enemies should be outlined and with what color
     for unit, data in pairs(enemies_found) do
         local breed = data.breed
         local tags = breed and breed.tags
-        local breed_name = breed and breed.name
-
-        -- Check per-enemy override setting first
-        local per_enemy_color_setting = breed_name and mod:get("enemy_color_" .. breed_name)
+        local breed_name = breed and breed.name and string.lower(breed.name)
         
-        if per_enemy_color_setting == "disabled" then
-            -- Skip this enemy entirely if it's disabled
-            goto continue
+        -- First, check if this enemy is disabled in per-enemy settings
+        if use_per_enemy_colors then
+            local per_enemy_color_setting = breed_name and mod:get("enemy_color_" .. breed_name)
+            if per_enemy_color_setting == "disabled" then
+                goto continue -- Skip this enemy entirely
+            end
         end
 
         if should_include_unit(tags) then
-            local final_color = nil
-            if per_enemy_color_setting and per_enemy_color_setting ~= "none" then
-                -- 1. Use per-enemy override color if set
-                final_color = sanitize_color(per_enemy_color_setting, nil)
-            elseif is_elite_highlight_enabled() and is_elite_type(unit) then
-                -- 2. Use elite/special color if applicable
-                final_color = sanitize_color(get_elite_color(), nil)
+            -- ## FIXED COLOR LOGIC ##
+            -- Start with the default color as a baseline.
+            local final_color = sanitize_color(get_default_outline_color(), "yellow")
+
+            -- Priority 2: Check for elite override.
+            if is_elite_highlight_enabled() and is_elite_type(unit) then
+                final_color = sanitize_color(get_elite_color(), final_color)
             end
-            
-            -- 3. Fallback to default color
-            if not final_color then
-                final_color = sanitize_color(get_default_outline_color(), "yellow")
+
+            -- Priority 1 (Highest): Check for per-enemy override.
+            if use_per_enemy_colors then
+                local per_enemy_color_setting = breed_name and mod:get("enemy_color_" .. breed_name)
+                if per_enemy_color_setting and per_enemy_color_setting ~= "none" then
+                    final_color = sanitize_color(per_enemy_color_setting, final_color)
+                end
             end
 
             if final_color then
@@ -246,10 +244,14 @@ local function update_outlines()
 
     -- Apply performance limit by sorting by distance and taking the closest
     local max_outlines = get_max_outlines()
-    if #potential_outlines > max_outlines and max_outlines > 0 then
+    if max_outlines > 0 and #potential_outlines > max_outlines then
         table.sort(potential_outlines, function(a, b) return a.distance < b.distance end)
-        -- Trim the table
-        potential_outlines = { table.unpack(potential_outlines, 1, max_outlines) }
+        -- Trim the table by creating a new one with just the closest enemies
+        local trimmed_outlines = {}
+        for i = 1, max_outlines do
+            trimmed_outlines[i] = potential_outlines[i]
+        end
+        potential_outlines = trimmed_outlines
     end
 
     for _, data in ipairs(potential_outlines) do
@@ -331,3 +333,4 @@ mod.on_setting_changed = function(setting_id)
     -- When a setting changes, we should clear and re-evaluate outlines.
     clear_all_outlines()
 end
+
