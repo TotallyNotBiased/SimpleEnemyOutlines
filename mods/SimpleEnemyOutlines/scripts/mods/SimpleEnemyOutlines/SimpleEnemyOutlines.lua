@@ -24,7 +24,7 @@ local OUTLINE_COLOR_TEMPLATES = {
     silver = { color = {0.82, 0.82, 0.86}, priority = 4 },
 }
 
--- An empty table used for safely accessing breed tags
+-- used for safely accessing breed tags
 local EMPTY_TABLE = {}
 
 -- ######################################################################################################################
@@ -67,7 +67,7 @@ end
 -- ## Utility Functions
 -- ######################################################################################################################
 
--- Safely gets a valid color name from settings, otherwise returns a fallback.
+-- Safely gets a valid color name from settings
 local function sanitize_color(color_name, fallback)
     if color_name and OUTLINE_COLOR_TEMPLATES[color_name] then
         return color_name
@@ -75,7 +75,6 @@ local function sanitize_color(color_name, fallback)
     return fallback
 end
 
--- Checks if a unit is considered an "elite" type (elite, special, or monster).
 local function is_elite_type(unit)
     local breed = Unit.get_data(unit, "breed")
     if breed and breed.tags then
@@ -84,7 +83,6 @@ local function is_elite_type(unit)
     return false
 end
 
--- Gets the outline system from the game's managers.
 local function get_outline_system()
     return Managers.state.extension and Managers.state.extension:system("outline_system")
 end
@@ -93,7 +91,6 @@ end
 -- ## Core Logic
 -- ######################################################################################################################
 
--- Determines if a unit should be included based on the filter settings.
 local function should_include_unit(tags)
     tags = tags or EMPTY_TABLE
     local mode = get_highlight_filter_mode()
@@ -112,7 +109,6 @@ local function should_include_unit(tags)
     return true
 end
 
--- Scans for enemy units within a given radius around a center point.
 local function find_enemies_in_radius(center, radius)
     local side_system = Managers.state.extension and Managers.state.extension:system("side_system")
     if not side_system then return {} end
@@ -141,8 +137,6 @@ local function find_enemies_in_radius(center, radius)
     return enemies_in_range
 end
 
-
--- Safely removes an outline from a unit.
 local function remove_outline_safe(outline_system, unit, color_name)
     if not outline_system or not ALIVE[unit] or not color_name then
         return
@@ -150,7 +144,6 @@ local function remove_outline_safe(outline_system, unit, color_name)
     outline_system:remove_outline(unit, color_name, false)
 end
 
--- Clears all outlines currently managed by the mod.
 local function clear_all_outlines()
     local outline_system = get_outline_system()
     if not outline_system then return end
@@ -161,7 +154,7 @@ local function clear_all_outlines()
     outlined_units = {}
 end
 
--- Main update function, called every frame during gameplay.
+-- called every frame during gameplay
 local function update_outlines()
     -- Ensure we are in a mission
     if not Managers.player or not Managers.player:local_player(1) then
@@ -174,7 +167,6 @@ local function update_outlines()
         return
     end
     
-    -- If mod is disabled in settings, clear outlines and stop
     if not is_outlines_enabled() then
         clear_all_outlines()
         return
@@ -199,7 +191,7 @@ local function update_outlines()
 
     local use_per_enemy_colors = is_per_enemy_colors_enabled()
 
-    -- Determine which enemies should be outlined and with what color
+    -- determine which enemies should be outlined and with what color
     for unit, data in pairs(enemies_found) do
         local breed = data.breed
         local tags = breed and breed.tags
@@ -214,16 +206,12 @@ local function update_outlines()
         end
 
         if should_include_unit(tags) then
-            -- ## FIXED COLOR LOGIC ##
-            -- Start with the default color as a baseline.
             local final_color = sanitize_color(get_default_outline_color(), "yellow")
-
-            -- Priority 2: Check for elite override.
             if is_elite_highlight_enabled() and is_elite_type(unit) then
                 final_color = sanitize_color(get_elite_color(), final_color)
             end
 
-            -- Priority 1 (Highest): Check for per-enemy override.
+            -- Check for per-enemy override.
             if use_per_enemy_colors then
                 local per_enemy_color_setting = breed_name and mod:get("enemy_color_" .. breed_name)
                 if per_enemy_color_setting and per_enemy_color_setting ~= "none" then
@@ -283,6 +271,7 @@ local function update_outlines()
     end
 end
 
+-- this part is boilerplate from mod framework:
 
 -- ######################################################################################################################
 -- ## Mod Hooks and Callbacks
